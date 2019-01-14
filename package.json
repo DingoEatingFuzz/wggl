@@ -1,0 +1,15 @@
+{
+  "name": "wggl",
+  "version": "0.0.1",
+  "description": "A friendly interface to shaders",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Michael Lange",
+  "license": "MIT"
+}
