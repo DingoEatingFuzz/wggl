@@ -1,8 +1,7 @@
 export default `
-uniform vec2 scale;
-uniform float ratio;
-uniform bool showLines;
 uniform float seed;
+uniform sampler2D state;
+uniform vec2 scale;
 
 const float PI_2 = 6.283185307;
 const float PI = 3.1415926535897932384626433832795;
@@ -93,18 +92,11 @@ vec4 rainbow(float s, float numBands, float shiftPct) {
 }
 
 void main() {
-  vec2 pxSize = vec2(ratio, ratio);
-  bool showHorizontalLine = mod(floor(gl_FragCoord.y) / ratio, 1.0) < 0.01;
-  bool showVerticalLine = mod(floor(gl_FragCoord.x) / ratio, 1.0) < 0.01;
-  bool linePixel = showLines && (showHorizontalLine || showVerticalLine);
-
-  if (linePixel) {
-    float n = cnoise(floor(gl_FragCoord.xy / pxSize) * pxSize / scale * 5.0, seed);
-    vec4 r = rainbow(n, 1.0, 0.0);
-    gl_FragColor = vec4(r.x * 0.9, r.y * 0.9, r.z * 0.9, 1.0);
+  if (texture2D(state, gl_FragCoord.xy / scale).rgb == vec3(0.0)) {
+    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.0);
   } else {
-    float n = cnoise(floor(gl_FragCoord.xy / pxSize) * pxSize / scale * 5.0, seed);
-    gl_FragColor = rainbow(n, 1.0, 0.0);
+    float n = cnoise(floor(gl_FragCoord.xy / 1.0) * 1.0 / scale * 5.0, seed);
+    gl_FragColor = rainbow(n, 2.0, 0.0);
   }
 }
 `;
