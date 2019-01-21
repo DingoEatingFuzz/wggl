@@ -134,8 +134,9 @@ export default (canvas, vertShader, fragShader) => {
     gl,
     reset() {
       const { gl, canvas } = this;
-      canvas.width = Math.floor(canvas.clientWidth * window.devicePixelRatio);
-      canvas.height = Math.floor(canvas.clientHeight * window.devicePixelRatio);
+      const scale = Math.min(window.devicePixelRatio, 2);
+      canvas.width = Math.floor(canvas.clientWidth * scale);
+      canvas.height = Math.floor(canvas.clientHeight * scale);
       gl.viewport(0, 0, canvas.width, canvas.height);
       gl.clearColor(0,0,0,0);
       gl.clear(gl.COLOR_BUFFER_BIT);
