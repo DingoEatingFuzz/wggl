@@ -70,8 +70,10 @@ const randomBoard = (width, height) => {
 document.addEventListener("DOMContentLoaded", function() {
   let seed = Math.random() * 50;
   const canvas = document.querySelector('canvas');
-  canvas.width = Math.floor(canvas.clientWidth * window.devicePixelRatio);
-  canvas.height = Math.floor(canvas.clientHeight * window.devicePixelRatio);
+  const cScale = Math.min(window.devicePixelRatio, 2);
+  canvas.width = Math.floor(canvas.clientWidth * cScale);
+  canvas.height = Math.floor(canvas.clientHeight * cScale);
+  console.log(canvas.width, canvas.height);
 
   let stateBuffer = buffer(canvas);
   let multiPass = buffer(canvas);
@@ -97,7 +99,6 @@ document.addEventListener("DOMContentLoaded", function() {
     next.from(tmp);
 
     requestAnimationFrame(tick)
-    // setTimeout(tick, 250);
   })
 
   document.addEventListener("mouseup", function() {
