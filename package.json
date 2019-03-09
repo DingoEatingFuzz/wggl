@@ -2,7 +2,7 @@
   "name": "wggl",
   "version": "0.0.1",
   "description": "A friendly interface to shaders",
-  "main": "index.js",
+  "main": "src/wggl.js",
   "directories": {
     "example": "examples"
   },
@@ -11,5 +11,8 @@
   },
   "keywords": [],
   "author": "Michael Lange",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^3.3.3333"
+  }
 }

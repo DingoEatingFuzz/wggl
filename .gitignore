@@ -2,3 +2,4 @@ dist
 ./**/dist
 .cache
 ./**/.cache
+node_modules
