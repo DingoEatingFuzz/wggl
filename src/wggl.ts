@@ -46,14 +46,19 @@ enum GlType {
   uniform = 'uniform',
 }
 
+interface GlLocatable {
+  glType: GlType;
+}
+
 // Classes for storing state related to various buffer types before actually reading the buffers
-class Attr {
+class Attr implements GlLocatable {
+  public glType:GlType = GlType.attribute;
+
   constructor(
     public size:number = 1,
     public stride:number = 0,
     public offset:number = 0,
     public normalize:boolean = false,
-    public glType:GlType = GlType.uniform,
   ) { }
 }
 
@@ -62,75 +67,146 @@ enum UniformType {
   int = "int",
 }
 
-class Uniform {
+class Uniform  implements GlLocatable {
+  public glType:GlType = GlType.uniform;
+
   constructor(
     public length:number = 1,
     public type:UniformType = UniformType.float,
-    public glType:GlType = GlType.uniform,
   ) { }
 }
 
-// Convenience functions for creating attrs and uniforms
-export function attr(size: number = 1, stride: number = 0, offset: number = 0, normalize: boolean = false): Attr {
-  return new Attr(size, stride, offset, normalize, GlType.attribute);
+enum PixelFormat {
+  DEPTH_COMPONENT = "DEPTH_COMPONENT",
+  ALPHA = "ALPHA",
+  RGB = "RGB",
+  RGBA = "RGBA",
+  LUMINANCE = "LUMINANCE",
+  LUMINANCE_ALPHA = "LUMINANCE_ALPHA",
 }
 
-export function uniform(length: number = 1, type: UniformType = UniformType.float): Uniform {
-  return new Uniform(length, type, GlType.uniform);
+enum PixelType {
+  UNSIGNED_BYTE = "UNSIGNED_BYTE",
+  UNSIGNED_SHORT_4_4_4_4 = "UNSIGNED_SHORT_4_4_4_4",
+  UNSIGNED_SHORT_5_5_5_1 = "UNSIGNED_SHORT_5_5_5_1",
+  UNSIGNED_SHORT_5_6_5 = "UNSIGNED_SHORT_5_6_5",
 }
 
+enum TextureFilter {
+  NEAREST = "NEAREST",
+  LINEAR = "LINEAR",
+  // TODO: Break apart Min Filter and Mag Filter
+  // https://developer.mozilla.org/en-US/docs/Web/API/WebGLRenderingContext/texParameter
+}
 
-export const texture = (width, height, pixels = null, props) => {
-  const { format, wrap, filter, type } = Object.assign({
-    format: 'RGBA',
-    wrap: 'CLAMP_TO_EDGE',
-    filter: 'NEAREST',
-    type: 'UNSIGNED_BYTE'
-  }, props);
+enum TextureWrap {
+  REPEAT = "REPEAT",
+  CLAMP_TO_EDGE = "CLAMP_TO_EDGE",
+  MIRRORED_REPEAT = "MIRRORED_REPEAT",
+}
 
-  return canvas => {
-    const gl = canvas.getContext('webgl');
+interface TextureOptions {
+  format?: PixelFormat;
+  type?: PixelType;
+  wrap?: TextureWrap;
+  filter?: TextureFilter;
+}
 
-    if (!gl) {
+class Texture {
+  public format: PixelFormat = PixelFormat.RGBA;
+  public type: PixelType = PixelType.UNSIGNED_BYTE;
+  public wrap: TextureWrap = TextureWrap.CLAMP_TO_EDGE;
+  public filter: TextureFilter = TextureFilter.NEAREST;
+  public gl: WebGLRenderingContext;
+  public texture: WebGLTexture;
+
+  constructor(
+    public canvas:HTMLCanvasElement,
+    public width:number,
+    public height:number,
+    public pixels:WebGLTexture | ArrayBufferView = new Uint8Array(0),
+    props: TextureOptions
+  ) {
+    if (props != null) {
+      this.format = props.format || this.format;
+      this.type = props.type || this.type;
+      this.wrap = props.wrap || this.wrap;
+      this.filter = props.filter || this.filter;
+    }
+
+    this.gl = canvas.getContext('webgl');
+
+    if (!this.gl) {
       console.warn('No WebGL support');
       return;
     }
 
-    const texture = {
-      gl,
-      pixels,
-      width,
-      height,
-      format: gl[format],
-      wrap: gl[wrap],
-      filter: gl[filter],
-      type: gl[type],
-      texture: createTexture(gl, gl[wrap], gl[filter]),
+    this.texture = createTexture(this.gl, this.wrap, this.filter);
+    this.from(this.pixels);
+  }
 
-      from(pixels = null) {
-        if (pixels instanceof WebGLTexture) {
-          this.texture = pixels;
-          return;
-        }
+  public from(newPixels:WebGLTexture | ArrayBufferView = new Uint8Array(0)): void {
+    if (newPixels instanceof WebGLTexture) {
+      this.texture = newPixels;
+      return;
+    }
 
-        if (!isAnyArray(pixels)) pixels = texture.pixels;
+    newPixels = this.pixels;
 
-        const gl = this.gl;
-        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-        gl.bindTexture(gl.TEXTURE_2D, this.texture);
-        gl.texImage2D(gl.TEXTURE_2D, 0, this.format, this.width, this.height, 0, this.format, this.type, null);
-        if (pixels) {
-          gl.texImage2D(gl.TEXTURE_2D, 0, this.format, this.width, this.height, 0, this.format, this.type, pixels);
-        }
-      },
-    };
+    const gl = this.gl;
+    const format = gl[this.format];
+    const type = gl[this.type];
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, format, this.width, this.height, 0, format, type, null);
 
-    texture.from(pixels);
-    return texture;
+    if (newPixels) {
+      gl.texImage2D(gl.TEXTURE_2D, 0, format, this.width, this.height, 0, format, type, newPixels as ArrayBufferView);
+    }
   };
-};
+}
 
-export const buffer = (canvas, attachment = 'COLOR_ATTACHMENT0', level = 0) => {
+enum TexturePointer {
+  TEXTURE = "TEXTURE",
+  TEXTURE_2D = "TEXTURE_2D",
+  // TODO: Incomplete list
+  // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Constants#Textures
+}
+
+enum BufferAttachment {
+  COLOR_ATTACHMENT0 = "COLOR_ATTACHMENT0",
+  // TODO: Incomplete list
+  // https://developer.mozilla.org/en-US/docs/Web/API/WebGL_API/Constants#Draw_buffers
+}
+
+class Buffer {
+  constructor(
+    public gl:WebGLRenderingContext,
+    public texture:WebGLTexture,
+    public target:TexturePointer,
+    public buffer:WebGLBuffer,
+    public attachment:BufferAttachment,
+    public level:number
+  ) { }
+}
+
+// Convenience function for creating attrs
+export function attr(size: number = 1, stride: number = 0, offset: number = 0, normalize: boolean = false): Attr {
+  return new Attr(size, stride, offset, normalize);
+}
+
+// Convenience function for creating uniforms
+export function uniform(length: number = 1, type: UniformType = UniformType.float): Uniform {
+  return new Uniform(length, type);
+}
+
+// Creates a partially applied Texture factory
+export function texture(width: number, height: number, pixels:WebGLTexture | ArrayBufferView, props:TextureOptions): (HTMLCanvasElement) => Texture {
+  return canvas => new Texture(canvas, width, height, pixels, props);
+}
+
+// Creates a partially applied Buffer factory
+export function buffer(canvas: HTMLCanvasElement, attachment:BufferAttachment = BufferAttachment.COLOR_ATTACHMENT0, level:number = 0): (WebGLTexture, TexturePointer, BufferAttachment?, number?) => Buffer {
   const gl = canvas.getContext('webgl');
 
   if (!gl) {
@@ -140,15 +216,9 @@ export const buffer = (canvas, attachment = 'COLOR_ATTACHMENT0', level = 0) => {
 
   const buffer = gl.createFramebuffer();
 
-  return (texture, target = 'TEXTURE_2D', customAttachment, customLevel) => ({
-    gl,
-    texture,
-    target,
-    buffer,
-    attachment: customAttachment || attachment,
-    level: customLevel || level,
-  });
-};
+  return (texture:WebGLTexture, target: TexturePointer = TexturePointer.TEXTURE_2D, customAttachment?:BufferAttachment, customLevel?:number) =>
+    new Buffer(gl, texture, target, buffer, customAttachment || attachment, customLevel || level);
+}
 
 // Bakes a vertex and fragment shader into a canvas and returns an object
 // for operating with the resulting webgl program
@@ -279,11 +349,11 @@ export default (canvas, vertShader, fragShader) => {
   return instance;
 }
 
-function mergeAttrs(gl, program, source, attrs) {
-  if (source[attr] != null) {
-    console.warn(`Attribute ${attr} is being bound multiple times. Variable names should be unique across shaders and primitives`);
-  }
+function mergeAttrs(gl:WebGLRenderingContext, program:WebGLProgram, source:any, attrs:ShaderAttrs): void {
   Object.keys(attrs).forEach(attr => {
+    if (source[attr] != null) {
+      console.warn(`Attribute ${attr} is being bound multiple times. Variable names should be unique across shaders and primitives`);
+    }
     source[attr] = {
       location: locationForAttr(gl, program, attr, attrs[attr]),
       parameters: attrs[attr],
@@ -292,23 +362,23 @@ function mergeAttrs(gl, program, source, attrs) {
   });
 }
 
-function isAnyArray(arr) {
+function isAnyArray(arr:any): boolean {
   if (arr == null) return false;
 
   // True when arr is any of the typed arrays or the basic array
   return /^(Float(32|64)|Int(8|16|32)|Uint(8(Clamped)?|16|32|))?Array$/.test(arr.constructor.name);
 }
 
-function locationForAttr(gl, program, key, value) {
+function locationForAttr(gl:WebGLRenderingContext, program:WebGLProgram, key:string, value:GlLocatable): WebGLUniformLocation | number {
   switch (value.glType) {
-    case 'attribute':
+    case GlType.attribute:
       return gl.getAttribLocation(program, key);
-    case 'uniform':
+    case GlType.uniform:
       return gl.getUniformLocation(program, key);
   }
 }
 
-function createShader(gl, type, source) {
+function createShader(gl:WebGLRenderingContext, type:number, source:string): WebGLShader {
   let shader = gl.createShader(type);
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
@@ -324,7 +394,7 @@ function createShader(gl, type, source) {
   return shader;
 }
 
-function createProgram(gl, vertexShader, fragmentShader) {
+function createProgram(gl:WebGLRenderingContext, vertexShader:Shader, fragmentShader:Shader): WebGLProgram {
   let program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
@@ -341,13 +411,13 @@ function createProgram(gl, vertexShader, fragmentShader) {
   return program;
 }
 
-function createTexture(gl, wrap, filter) {
+function createTexture(gl:WebGLRenderingContext, wrap:TextureWrap, filter:TextureFilter): WebGLTexture {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, filter);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, filter);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl[wrap]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl[wrap]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl[filter]);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl[filter]);
 
   return texture;
 }
