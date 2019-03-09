@@ -1,5 +1,14 @@
+interface Shader {
+  attrs: ShaderAttrs;
+  src: string;
+}
+
+interface ShaderAttrs {
+  [key: string]: any;
+}
+
 // Returns a function for binding attributes to a vertex shader
-export const vs = strings => {
+export function vs(strings: string | string[]): (attrs: ShaderAttrs) => Shader {
   if (typeof strings === 'string') strings = [strings];
   const src = `
     precision mediump float;
@@ -13,10 +22,10 @@ export const vs = strings => {
       src
     };
   };
-};
+}
 
 // Returns a function for binding attributes to a fragment shader
-export const fs = strings => {
+export function fs(strings: string | string[]): (attrs: ShaderAttrs) => Shader {
   if (typeof strings === 'string') strings = [strings];
   const src = `
     precision mediump float;
@@ -30,16 +39,46 @@ export const fs = strings => {
       src
     };
   };
-};
+}
 
-// Bundles attribute related properties for using when reading attribute buffers
-export const attr = (size = 1, stride = 0, offset = 0, normalize = false) => ({
-  size, normalize, stride, offset, glType: 'attribute',
-});
+enum GlType {
+  attribute = 'attribute',
+  uniform = 'uniform',
+}
 
-export const uniform = (length = 1, type = 'float') => ({
-  length, type, glType: 'uniform',
-});
+// Classes for storing state related to various buffer types before actually reading the buffers
+class Attr {
+  constructor(
+    public size:number = 1,
+    public stride:number = 0,
+    public offset:number = 0,
+    public normalize:boolean = false,
+    public glType:GlType = GlType.uniform,
+  ) { }
+}
+
+enum UniformType {
+  float = "float",
+  int = "int",
+}
+
+class Uniform {
+  constructor(
+    public length:number = 1,
+    public type:UniformType = UniformType.float,
+    public glType:GlType = GlType.uniform,
+  ) { }
+}
+
+// Convenience functions for creating attrs and uniforms
+export function attr(size: number = 1, stride: number = 0, offset: number = 0, normalize: boolean = false): Attr {
+  return new Attr(size, stride, offset, normalize, GlType.attribute);
+}
+
+export function uniform(length: number = 1, type: UniformType = UniformType.float): Uniform {
+  return new Uniform(length, type, GlType.uniform);
+}
+
 
 export const texture = (width, height, pixels = null, props) => {
   const { format, wrap, filter, type } = Object.assign({
