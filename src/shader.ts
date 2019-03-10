@@ -9,11 +9,11 @@ export interface ShaderAttrs {
 
 // Returns a function for binding attributes to a vertex shader
 export function vs(strings: string | string[]): (attrs: ShaderAttrs) => Shader {
-  if (typeof strings === 'string') strings = [strings];
+  if (typeof strings === "string") strings = [strings];
   const src = `
     precision mediump float;
 
-    ${strings.join('')}
+    ${strings.join("")}
   `;
 
   return attrs => {
@@ -26,11 +26,11 @@ export function vs(strings: string | string[]): (attrs: ShaderAttrs) => Shader {
 
 // Returns a function for binding attributes to a fragment shader
 export function fs(strings: string | string[]): (attrs: ShaderAttrs) => Shader {
-  if (typeof strings === 'string') strings = [strings];
+  if (typeof strings === "string") strings = [strings];
   const src = `
     precision mediump float;
 
-    ${strings.join('')}
+    ${strings.join("")}
   `;
 
   return attrs => {
