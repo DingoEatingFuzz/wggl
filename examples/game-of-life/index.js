@@ -1,4 +1,4 @@
-import { default as wggl, fs, vs, attr, uniform, texture, buffer, QUAD2 } from '../../src/wggl';
+import { default as wggl, fs, vs, attr, uniform, texture, buffer, QUAD2 } from '../../src';
 import rainbowSrc from './rainbow';
 
 const { assign } = Object;
