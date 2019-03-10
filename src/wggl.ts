@@ -182,7 +182,7 @@ enum BufferAttachment {
 class Buffer {
   constructor(
     public gl:WebGLRenderingContext,
-    public texture:WebGLTexture,
+    public texture:Texture,
     public target:TexturePointer,
     public buffer:WebGLBuffer,
     public attachment:BufferAttachment,
@@ -216,140 +216,211 @@ export function buffer(canvas: HTMLCanvasElement, attachment:BufferAttachment = 
 
   const buffer = gl.createFramebuffer();
 
-  return (texture:WebGLTexture, target: TexturePointer = TexturePointer.TEXTURE_2D, customAttachment?:BufferAttachment, customLevel?:number) =>
+  return (texture:Texture, target: TexturePointer = TexturePointer.TEXTURE_2D, customAttachment?:BufferAttachment, customLevel?:number) =>
     new Buffer(gl, texture, target, buffer, customAttachment || attachment, customLevel || level);
 }
 
 // Bakes a vertex and fragment shader into a canvas and returns an object
 // for operating with the resulting webgl program
-export default (canvas, vertShader, fragShader) => {
-  const gl = canvas.getContext('webgl');
-  let programs = {};
 
-  // TODO: replace gross duck-typing with something less squishy
-  if (!vertShader.src || !vertShader.attrs) {
-    programs = vertShader;
-  } else {
-    programs = { default: [ vertShader, fragShader ] };
-  }
+interface WgglProgramShaders {
+  [key: string]: [Shader, Shader];
+}
 
-  if (!gl) {
-    console.warn('No WebGL support');
-    return;
-  }
+enum DrawModes {
+  POINTS = "POINTS",
+  LINES = "LINES",
+  LINE_LOOP = "LINE_LOOP",
+  LINE_STRIP = "LINE_STRIP",
+  TRIANGLES = "TRIANGLES",
+  TRIANGLE_STRIP = "TRIANGLE_STRIP",
+  TRIANGLE_FAN = "TRIANGLE_FAN",
+}
 
-  const instance = {
-    canvas,
-    gl,
-    reset() {
-      const { gl, canvas } = this;
-      const scale = Math.min(window.devicePixelRatio, 2);
-      canvas.width = Math.floor(canvas.clientWidth * scale);
-      canvas.height = Math.floor(canvas.clientHeight * scale);
-      gl.viewport(0, 0, canvas.width, canvas.height);
-      gl.clearColor(0,0,0,0);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-    },
+class WgglProgram {
+  public gl:WebGLRenderingContext;
+
+  constructor(public canvas:HTMLCanvasElement, public bindPointers:AttrPointers, public program:WebGLProgram) {
+    this.gl = canvas.getContext('webgl');
   };
 
-  Object.entries(programs).forEach(([ programName, [vShader, fShader] ]) => {
-    if (instance[programName] != null) {
-      console.warn(`Skipping program ${programName}. It is either a duplicate program or uses a reserved name.`);
-    }
+  public draw(
+    values:ShaderAttrs,
+    drawMode:DrawModes = DrawModes.TRIANGLE_STRIP,
+    offset:number = 0,
+    size:number = 4,
+    keepCurrentViewport:boolean = false
+  ): void {
+    const { canvas, gl } = this;
+    let textureCounter = 0;
 
-    const bindPointers = {};
-    const vs = createShader(gl, gl.VERTEX_SHADER, vShader.src);
-    const fs = createShader(gl, gl.FRAGMENT_SHADER, fShader.src);
-    let program = createProgram(gl, vs, fs);
+    if (!keepCurrentViewport) gl.useProgram(this.program);
 
-    // Store the gl location (pointer) of each attribute provided to the vert and frag shaders
-    // along with the read parameters of each attribute
-    mergeAttrs(gl, program, bindPointers, vShader.attrs);
-    mergeAttrs(gl, program, bindPointers, fShader.attrs);
+    // Pass values to the GPU
+    Object.keys(values).forEach(key => {
+      const value = values[key];
+      const attr = this.bindPointers[key];
 
-    Object.entries(bindPointers).forEach(([key, value]) => {
-      if (value.parameters.glType === 'attribute') {
-        const buffer = gl.createBuffer();
-        value.buffer = buffer;
+      switch (attr.parameters.glType) {
+        case GlType.attribute:
+          gl.enableVertexAttribArray(attr.location as number);
+          gl.bindBuffer(gl.ARRAY_BUFFER, attr.buffer);
+          gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(value), gl.STATIC_DRAW);
+
+          const { size, normalize, stride, offset } = attr.parameters;
+          gl.vertexAttribPointer(attr.location as number, size, gl.FLOAT, normalize, stride, offset);
+          break;
+
+        case GlType.uniform:
+          // TODO: Could be simplified by making the UniformType valies the single characters
+          const typeModifier = attr.parameters.type === UniformType.float ? 'f' : 'i';
+          if (isAnyArray(value)) {
+            if (value.length > 4) {
+              throw new Error('Value of uniform type has more than the maximum four dimensions');
+            }
+            // Dynamic GL method name, (e.g., gl.uniform4fv)
+            gl[`uniform${value.length}${typeModifier}v`](attr.location, value);
+          } else if(value instanceof WebGLTexture && gl.isTexture(value)) {
+            // bind texture
+            gl.activeTexture(gl.TEXTURE0 + textureCounter);
+            gl.bindTexture(gl.TEXTURE_2D, value);
+            gl.uniform1i(attr.location, textureCounter);
+            textureCounter++;
+          } else if (typeof value !== 'number' && typeof value !== 'boolean') {
+            throw new Error('Value of uniform type must be a number, boolean, or array');
+          } else {
+            gl[`uniform1${typeModifier}`](attr.location, value);
+          }
+          break;
       }
     });
 
-    const wgglProgram = {
-      canvas,
-      gl,
-      bindPointers,
-      program,
-      draw(values, drawMode = 'TRIANGLE_STRIP', offset = 0, size = 4, keepCurrentViewport = false) {
-        const gl = this.gl;
-        let textureCounter = 0;
+    // Draw
+    if (!keepCurrentViewport) {
+      gl.viewport(0, 0, canvas.width, canvas.height)
+    }
+    gl.drawArrays(gl[drawMode], offset, size);
+  };
 
-        if(!keepCurrentViewport) gl.useProgram(this.program);
+  public drawTo(
+    buffer:Buffer,
+    values:AttrPointers,
+    drawMode:DrawModes = DrawModes.TRIANGLE_STRIP,
+    offset:number = 0,
+    size:number = 4
+  ): void {
+    const gl = this.gl;
+    const texture = buffer.texture;
 
-        Object.entries(values).forEach(([key, value]) => {
-          const attr = this.bindPointers[key];
-          switch (attr.parameters.glType) {
-            case 'attribute':
-              gl.enableVertexAttribArray(attr.location);
-              gl.bindBuffer(gl.ARRAY_BUFFER, attr.buffer);
-              gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(value), gl.STATIC_DRAW);
+    // Use the provided program to draw to the provided buffer
+    gl.useProgram(this.program);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, buffer.buffer);
+    gl.viewport(0, 0, texture.width, texture.height);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl[buffer.attachment],
+      gl[buffer.target],
+      texture.texture,
+      gl[buffer.level]
+    );
 
-              const { size, normalize, stride, offset } = attr.parameters;
-              gl.vertexAttribPointer(attr.location, size, gl.FLOAT, normalize, stride, offset);
-              break;
-            case 'uniform':
-              const typeModifier = attr.parameters.type === 'float' ? 'f' : 'i';
-              if (isAnyArray(value)) {
-                if (value.length > 4) {
-                  throw new Error('Value of uniform type has more than the maximum four dimensions');
-                }
-                gl[`uniform${value.length}${typeModifier}v`](attr.location, value);
-              } else if (value instanceof WebGLTexture && gl.isTexture(value)) {
-                // bind texture
-                gl.activeTexture(gl.TEXTURE0 + textureCounter);
-                gl.bindTexture(gl.TEXTURE_2D, value);
-                gl.uniform1i(attr.location, textureCounter);
-                textureCounter++;
-              } else if (typeof value !== 'number' && typeof value !== 'boolean') {
-                throw new Error('Value of uniform type must be a number, boolean, or array');
-              } else {
-                gl[`uniform1${typeModifier}`](attr.location, value);
-              }
-              break;
-          }
-        });
+    this.draw(values, drawMode, offset, size, true);
 
-        // Draw the things
-        if (!keepCurrentViewport) {
-          gl.viewport(0, 0, canvas.width, canvas.height);
-        }
-        gl.drawArrays(gl[drawMode], offset, size);
-      },
-      drawTo(buffer, values, drawMode = 'TRIANGLE_STRIP', offset = 0, size = 4) {
-        const gl = this.gl;
-        const texture = buffer.texture;
-        gl.useProgram(this.program);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, buffer.buffer);
-        gl.viewport(0, 0, texture.width, texture.height);
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl[buffer.attachment], gl[buffer.target], texture.texture, gl[buffer.level]);
-        this.draw(values, drawMode, offset, size, true);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      },
-    };
-
-    instance[programName] = wgglProgram;
-  });
-
-  instance.reset();
-
-  if (instance.default) {
-    instance.draw = instance.default.draw.bind(instance.default);
-    instance.drawTo = instance.default.drawTo.bind(instance.default);
-  }
-
-  return instance;
+    // Reset the draw buffer to the screen
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  };
 }
 
-function mergeAttrs(gl:WebGLRenderingContext, program:WebGLProgram, source:any, attrs:ShaderAttrs): void {
+interface AttrPointer {
+  location: WebGLUniformLocation | number;
+  parameters: any;
+  buffer: WebGLBuffer;
+}
+
+interface AttrPointers {
+  [key: string]: AttrPointer;
+}
+
+class Wggl {
+  public canvas: HTMLCanvasElement;
+  public gl: WebGLRenderingContext;
+
+  // Programs become dynamic properties on the Wggl instance, this just prevents
+  // unwanted types from becoming properties.
+  [key: string]: HTMLCanvasElement | WebGLRenderingContext | WgglProgram | Function;
+
+  constructor(canvas: HTMLCanvasElement, vertShader:Shader, fragShader:Shader);
+  constructor(canvas: HTMLCanvasElement, vertShader:any, fragShader?:Shader) {
+    this.canvas = canvas;
+    this.gl = canvas.getContext('webgl');
+
+    let programs: WgglProgramShaders;
+    if (vertShader && fragShader) {
+      programs = { default: [ vertShader, fragShader ] }
+    } else {
+      programs = vertShader;
+    }
+
+    // do things with programs
+    this.setupPrograms(programs);
+
+    this.reset();
+
+    // If there is a default program, "hoist" its methods to the Wggl instance
+    // wggl.default.draw() ==> wggl.draw();
+    // wggl.default.drawTo() ==> wggl.drawTo();
+    if (this.default) {
+      const defaultProgram = this.default as WgglProgram;
+      this.draw = defaultProgram.draw.bind(this.default);
+      this.drawTo = defaultProgram.drawTo.bind(this.default);
+    }
+  };
+
+  setupPrograms(programs:WgglProgramShaders): void {
+    Object.keys(programs).forEach(programName => {
+      const [vShader, fShader] = programs[programName];
+      const gl = this.gl;
+
+      if (this[programName] != null) {
+        console.warn(`Skipping program ${programName}. It is either a duplicate program or uses a reserved name`);
+      }
+
+      const bindPointers:AttrPointers = {};
+      const vs = createShader(gl, gl.VERTEX_SHADER, vShader.src);
+      const fs = createShader(gl, gl.FRAGMENT_SHADER, fShader.src);
+      let program = createProgram(gl, vs, fs);
+
+      mergeAttrs(gl, program, bindPointers, vShader.attrs);
+      mergeAttrs(gl, program, bindPointers, fShader.attrs);
+
+      Object.keys(bindPointers).forEach(key => {
+        const value = bindPointers[key];
+        if (value.parameters.glType === GlType.attribute) {
+          value.buffer = gl.createBuffer();
+        }
+      });
+
+      this[programName] = new WgglProgram(this.canvas, bindPointers, program);
+    })
+  }
+
+  public reset(): void {
+    const { gl, canvas } = this;
+    const scale = Math.min(window.devicePixelRatio, 2);
+    canvas.width = Math.floor(canvas.clientWidth * scale);
+    canvas.height = Math.floor(canvas.clientHeight * scale);
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    gl.clearColor(0,0,0,0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+}
+
+// Convenience function for constructing a Wggl instance
+export default (canvas:HTMLCanvasElement, vertShader:Shader, fragShader:Shader) => {
+  return new Wggl(canvas, vertShader, fragShader);
+}
+
+function mergeAttrs(gl:WebGLRenderingContext, program:WebGLProgram, source:AttrPointers, attrs:ShaderAttrs): void {
   Object.keys(attrs).forEach(attr => {
     if (source[attr] != null) {
       console.warn(`Attribute ${attr} is being bound multiple times. Variable names should be unique across shaders and primitives`);
@@ -357,7 +428,7 @@ function mergeAttrs(gl:WebGLRenderingContext, program:WebGLProgram, source:any, 
     source[attr] = {
       location: locationForAttr(gl, program, attr, attrs[attr]),
       parameters: attrs[attr],
-      buffer: null
+      buffer: null,
     };
   });
 }
@@ -394,7 +465,7 @@ function createShader(gl:WebGLRenderingContext, type:number, source:string): Web
   return shader;
 }
 
-function createProgram(gl:WebGLRenderingContext, vertexShader:Shader, fragmentShader:Shader): WebGLProgram {
+function createProgram(gl:WebGLRenderingContext, vertexShader:WebGLShader, fragmentShader:WebGLShader): WebGLProgram {
   let program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
