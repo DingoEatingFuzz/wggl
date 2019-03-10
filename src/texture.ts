@@ -1,4 +1,9 @@
-import { PixelFormat, PixelType, TextureWrap, TextureFilter } from './primitives';
+import {
+  PixelFormat,
+  PixelType,
+  TextureWrap,
+  TextureFilter
+} from "./primitives";
 
 export interface TextureOptions {
   format?: PixelFormat;
@@ -16,10 +21,10 @@ export class Texture {
   public texture: WebGLTexture;
 
   constructor(
-    public canvas:HTMLCanvasElement,
-    public width:number,
-    public height:number,
-    public pixels:WebGLTexture | ArrayBufferView = new Uint8Array(0),
+    public canvas: HTMLCanvasElement,
+    public width: number,
+    public height: number,
+    public pixels: WebGLTexture | ArrayBufferView = new Uint8Array(0),
     props: TextureOptions
   ) {
     if (props != null) {
@@ -29,10 +34,10 @@ export class Texture {
       this.filter = props.filter || this.filter;
     }
 
-    this.gl = canvas.getContext('webgl');
+    this.gl = canvas.getContext("webgl");
 
     if (!this.gl) {
-      console.warn('No WebGL support');
+      console.warn("No WebGL support");
       return;
     }
 
@@ -40,7 +45,9 @@ export class Texture {
     this.from(this.pixels);
   }
 
-  public from(newPixels:WebGLTexture | ArrayBufferView = new Uint8Array(0)): void {
+  public from(
+    newPixels: WebGLTexture | ArrayBufferView = new Uint8Array(0)
+  ): void {
     if (newPixels instanceof WebGLTexture) {
       this.texture = newPixels;
       return;
@@ -53,15 +60,39 @@ export class Texture {
     const type = gl[this.type];
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, format, this.width, this.height, 0, format, type, null);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      format,
+      this.width,
+      this.height,
+      0,
+      format,
+      type,
+      null
+    );
 
     if (newPixels) {
-      gl.texImage2D(gl.TEXTURE_2D, 0, format, this.width, this.height, 0, format, type, newPixels as ArrayBufferView);
+      gl.texImage2D(
+        gl.TEXTURE_2D,
+        0,
+        format,
+        this.width,
+        this.height,
+        0,
+        format,
+        type,
+        newPixels as ArrayBufferView
+      );
     }
-  };
+  }
 }
 
-function createTexture(gl:WebGLRenderingContext, wrap:TextureWrap, filter:TextureFilter): WebGLTexture {
+function createTexture(
+  gl: WebGLRenderingContext,
+  wrap: TextureWrap,
+  filter: TextureFilter
+): WebGLTexture {
   let texture = gl.createTexture();
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl[wrap]);

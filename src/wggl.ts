@@ -1,6 +1,6 @@
-import { Shader, ShaderAttrs } from './shader';
-import { GlType, GlLocatable } from './primitives';
-import { WgglProgram, WgglProgramShaders, AttrPointers } from './program';
+import { Shader, ShaderAttrs } from "./shader";
+import { GlType, GlLocatable } from "./primitives";
+import { WgglProgram, WgglProgramShaders, AttrPointers } from "./program";
 
 export class Wggl {
   public canvas: HTMLCanvasElement;
@@ -8,16 +8,24 @@ export class Wggl {
 
   // Programs become dynamic properties on the Wggl instance, this just prevents
   // unwanted types from becoming properties.
-  [key: string]: HTMLCanvasElement | WebGLRenderingContext | WgglProgram | Function;
+  [key: string]:
+    | HTMLCanvasElement
+    | WebGLRenderingContext
+    | WgglProgram
+    | Function;
 
-  constructor(canvas: HTMLCanvasElement, vertShader:Shader, fragShader:Shader);
-  constructor(canvas: HTMLCanvasElement, vertShader:any, fragShader?:Shader) {
+  constructor(
+    canvas: HTMLCanvasElement,
+    vertShader: Shader,
+    fragShader: Shader
+  );
+  constructor(canvas: HTMLCanvasElement, vertShader: any, fragShader?: Shader) {
     this.canvas = canvas;
-    this.gl = canvas.getContext('webgl');
+    this.gl = canvas.getContext("webgl");
 
     let programs: WgglProgramShaders;
     if (vertShader && fragShader) {
-      programs = { default: [ vertShader, fragShader ] }
+      programs = { default: [vertShader, fragShader] };
     } else {
       programs = vertShader;
     }
@@ -35,18 +43,20 @@ export class Wggl {
       this.draw = defaultProgram.draw.bind(this.default);
       this.drawTo = defaultProgram.drawTo.bind(this.default);
     }
-  };
+  }
 
-  setupPrograms(programs:WgglProgramShaders): void {
+  setupPrograms(programs: WgglProgramShaders): void {
     Object.keys(programs).forEach(programName => {
       const [vShader, fShader] = programs[programName];
       const gl = this.gl;
 
       if (this[programName] != null) {
-        console.warn(`Skipping program ${programName}. It is either a duplicate program or uses a reserved name`);
+        console.warn(
+          `Skipping program ${programName}. It is either a duplicate program or uses a reserved name`
+        );
       }
 
-      const bindPointers:AttrPointers = {};
+      const bindPointers: AttrPointers = {};
       const vs = createShader(gl, gl.VERTEX_SHADER, vShader.src);
       const fs = createShader(gl, gl.FRAGMENT_SHADER, fShader.src);
       let program = createProgram(gl, vs, fs);
@@ -62,7 +72,7 @@ export class Wggl {
       });
 
       this[programName] = new WgglProgram(this.canvas, bindPointers, program);
-    })
+    });
   }
 
   public reset(): void {
@@ -71,25 +81,37 @@ export class Wggl {
     canvas.width = Math.floor(canvas.clientWidth * scale);
     canvas.height = Math.floor(canvas.clientHeight * scale);
     gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(0,0,0,0);
+    gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
   }
 }
 
-function mergeAttrs(gl:WebGLRenderingContext, program:WebGLProgram, source:AttrPointers, attrs:ShaderAttrs): void {
+function mergeAttrs(
+  gl: WebGLRenderingContext,
+  program: WebGLProgram,
+  source: AttrPointers,
+  attrs: ShaderAttrs
+): void {
   Object.keys(attrs).forEach(attr => {
     if (source[attr] != null) {
-      console.warn(`Attribute ${attr} is being bound multiple times. Variable names should be unique across shaders and primitives`);
+      console.warn(
+        `Attribute ${attr} is being bound multiple times. Variable names should be unique across shaders and primitives`
+      );
     }
     source[attr] = {
       location: locationForAttr(gl, program, attr, attrs[attr]),
       parameters: attrs[attr],
-      buffer: null,
+      buffer: null
     };
   });
 }
 
-function locationForAttr(gl:WebGLRenderingContext, program:WebGLProgram, key:string, value:GlLocatable): WebGLUniformLocation | number {
+function locationForAttr(
+  gl: WebGLRenderingContext,
+  program: WebGLProgram,
+  key: string,
+  value: GlLocatable
+): WebGLUniformLocation | number {
   switch (value.glType) {
     case GlType.attribute:
       return gl.getAttribLocation(program, key);
@@ -98,7 +120,11 @@ function locationForAttr(gl:WebGLRenderingContext, program:WebGLProgram, key:str
   }
 }
 
-function createShader(gl:WebGLRenderingContext, type:number, source:string): WebGLShader {
+function createShader(
+  gl: WebGLRenderingContext,
+  type: number,
+  source: string
+): WebGLShader {
   let shader = gl.createShader(type);
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
@@ -106,7 +132,7 @@ function createShader(gl:WebGLRenderingContext, type:number, source:string): Web
   const isCompiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
 
   if (!isCompiled) {
-    const err = gl.getShaderInfoLog(shader)
+    const err = gl.getShaderInfoLog(shader);
     gl.deleteShader(shader);
     throw new Error(err);
   }
@@ -114,7 +140,11 @@ function createShader(gl:WebGLRenderingContext, type:number, source:string): Web
   return shader;
 }
 
-function createProgram(gl:WebGLRenderingContext, vertexShader:WebGLShader, fragmentShader:WebGLShader): WebGLProgram {
+function createProgram(
+  gl: WebGLRenderingContext,
+  vertexShader: WebGLShader,
+  fragmentShader: WebGLShader
+): WebGLProgram {
   let program = gl.createProgram();
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
