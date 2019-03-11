@@ -21,7 +21,7 @@ export class Wggl {
   );
   constructor(canvas: HTMLCanvasElement, vertShader: any, fragShader?: Shader) {
     this.canvas = canvas;
-    this.gl = canvas.getContext("webgl");
+    this.gl = canvas.getContext("webgl") as WebGLRenderingContext;
 
     let programs: WgglProgramShaders;
     if (vertShader && fragShader) {
@@ -67,7 +67,7 @@ export class Wggl {
       Object.keys(bindPointers).forEach(key => {
         const value = bindPointers[key];
         if (value.parameters.glType === GlType.attribute) {
-          value.buffer = gl.createBuffer();
+          value.buffer = gl.createBuffer() as WebGLBuffer;
         }
       });
 
@@ -100,8 +100,7 @@ function mergeAttrs(
     }
     source[attr] = {
       location: locationForAttr(gl, program, attr, attrs[attr]),
-      parameters: attrs[attr],
-      buffer: null
+      parameters: attrs[attr]
     };
   });
 }
@@ -116,7 +115,7 @@ function locationForAttr(
     case GlType.attribute:
       return gl.getAttribLocation(program, key);
     case GlType.uniform:
-      return gl.getUniformLocation(program, key);
+      return gl.getUniformLocation(program, key) as WebGLUniformLocation;
   }
 }
 
@@ -125,14 +124,14 @@ function createShader(
   type: number,
   source: string
 ): WebGLShader {
-  let shader = gl.createShader(type);
+  let shader = gl.createShader(type) as WebGLShader;
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
 
   const isCompiled = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
 
   if (!isCompiled) {
-    const err = gl.getShaderInfoLog(shader);
+    const err = gl.getShaderInfoLog(shader) as string;
     gl.deleteShader(shader);
     throw new Error(err);
   }
@@ -145,7 +144,7 @@ function createProgram(
   vertexShader: WebGLShader,
   fragmentShader: WebGLShader
 ): WebGLProgram {
-  let program = gl.createProgram();
+  let program = gl.createProgram() as WebGLProgram;
   gl.attachShader(program, vertexShader);
   gl.attachShader(program, fragmentShader);
   gl.linkProgram(program);
@@ -153,7 +152,7 @@ function createProgram(
   const isLinked = gl.getProgramParameter(program, gl.LINK_STATUS);
 
   if (!isLinked) {
-    const err = gl.getProgramInfoLog(program);
+    const err = gl.getProgramInfoLog(program) as string;
     gl.deleteProgram(program);
     throw new Error(err);
   }

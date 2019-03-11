@@ -3,6 +3,11 @@ import { UniformType } from "./uniform";
 import { Buffer } from "./buffer";
 import { GlType, DrawModes } from "./primitives";
 
+// Overriding interface to allow for dynamic property lookup
+interface WebGLRenderingContext {
+  [key: string]: any;
+}
+
 export interface WgglProgramShaders {
   [key: string]: [Shader, Shader];
 }
@@ -10,7 +15,7 @@ export interface WgglProgramShaders {
 export interface AttrPointer {
   location: WebGLUniformLocation | number;
   parameters: any;
-  buffer: WebGLBuffer;
+  buffer?: WebGLBuffer;
 }
 
 export interface AttrPointers {
@@ -27,7 +32,7 @@ export class WgglProgram {
     public bindPointers: AttrPointers,
     public program: WebGLProgram
   ) {
-    this.gl = canvas.getContext("webgl");
+    this.gl = canvas.getContext("webgl") as WebGLRenderingContext;
   }
 
   public draw(

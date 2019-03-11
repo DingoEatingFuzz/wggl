@@ -29,7 +29,7 @@ export function texture(
   height: number,
   pixels: WebGLTexture | ArrayBufferView,
   props: TextureOptions
-): (HTMLCanvasElement) => Texture {
+): (canvas: HTMLCanvasElement) => Texture {
   return canvas => new Texture(canvas, width, height, pixels, props);
 }
 
@@ -38,12 +38,17 @@ export function buffer(
   canvas: HTMLCanvasElement,
   attachment: BufferAttachment = BufferAttachment.COLOR_ATTACHMENT0,
   level: number = 0
-): (WebGLTexture, TexturePointer, BufferAttachment?, number?) => Buffer {
+): (
+  texture: Texture,
+  target: TexturePointer,
+  attachment?: BufferAttachment,
+  level?: number
+) => Buffer | void {
   const gl = canvas.getContext("webgl");
 
   if (!gl) {
     console.warn("No WebGL support");
-    return;
+    return () => {};
   }
 
   const buffer = gl.createFramebuffer();
@@ -58,7 +63,7 @@ export function buffer(
       gl,
       texture,
       target,
-      buffer,
+      buffer as WebGLBuffer,
       customAttachment || attachment,
       customLevel || level
     );
