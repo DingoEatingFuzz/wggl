@@ -18,7 +18,7 @@ export class Texture {
   public wrap: TextureWrap = TextureWrap.CLAMP_TO_EDGE;
   public filter: TextureFilter = TextureFilter.NEAREST;
   public gl: WebGLRenderingContext;
-  public texture: WebGLTexture;
+  public texture?: WebGLTexture;
 
   constructor(
     public canvas: HTMLCanvasElement,
@@ -34,7 +34,7 @@ export class Texture {
       this.filter = props.filter || this.filter;
     }
 
-    this.gl = canvas.getContext("webgl");
+    this.gl = canvas.getContext("webgl") as WebGLRenderingContext;
 
     if (!this.gl) {
       console.warn("No WebGL support");
@@ -59,7 +59,7 @@ export class Texture {
     const format = gl[this.format];
     const type = gl[this.type];
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-    gl.bindTexture(gl.TEXTURE_2D, this.texture);
+    gl.bindTexture(gl.TEXTURE_2D, this.texture as WebGLTexture);
     gl.texImage2D(
       gl.TEXTURE_2D,
       0,
@@ -93,7 +93,7 @@ function createTexture(
   wrap: TextureWrap,
   filter: TextureFilter
 ): WebGLTexture {
-  let texture = gl.createTexture();
+  let texture = gl.createTexture() as WebGLTexture;
   gl.bindTexture(gl.TEXTURE_2D, texture);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl[wrap]);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl[wrap]);
